@@ -1,0 +1,45 @@
+{
+  "name": "use-discord",
+  "version": "1.0.0",
+  "description": "A React hook for logging in with Discord",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "eslint",
+    "build": "npm-run-all --sequential build:*",
+    "build:clean": "rimraf dist",
+    "build:build": "babel -o dist/index.js --minified index.js",
+    "dev": "babel --watch -o dist/index.js index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com-ftreesmilo:ftreesmilo/use-discord.git"
+  },
+  "author": "ftreesmilo <58193105+ftreesmilo@users.noreply.github.com>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "bluebird": "^3.7.2",
+    "debug": "^4.3.4",
+    "moment": "^2.29.3",
+    "pkce-challenge": "^3.0.0",
+    "process": "^0.11.10",
+    "use-interval": "^1.4.0"
+  },
+  "peerDependencies": {
+    "react": "^17 || ^18"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.17.10",
+    "@babel/core": "^7.17.10",
+    "@babel/preset-env": "^7.17.10",
+    "@babel/preset-react": "^7.16.7",
+    "eslint": "^8.15.0",
+    "npm-run-all": "^4.1.5",
+    "rimraf": "^3.0.2"
+  },
+  "keywords": [
+    "discord",
+    "hook",
+    "react",
+    "web"
+  ]
+}
