@@ -5,6 +5,8 @@ import moment from 'moment';
 import useInterval from 'use-interval';
 import debug from 'debug';
 
+const STATE = Symbol('STATE');
+
 const log = debug('discord:log');
 const error = debug('discord:error');
 error.log = console.error.bind(console);
@@ -13,7 +15,7 @@ info.log = console.info.bind(console);
 
 const login = ({client_id, redirect_uri, scopes}) => {
   const { code_challenge, code_verifier } = challenge(128);
-  navigator.serviceWorker.controller.postMessage({ type: 'oauth', code_verifier });
+  navigator.serviceWorker.controller.postMessage({ type: 'use-discord', code_verifier, redirect_uri, client_id });
   const url = new URL('https://discord.com/api/oauth2/authorize');
   url.search = new URLSearchParams({
     client_id,
@@ -64,10 +66,11 @@ const discord = ({guilds, ...opts}) => {
   }, [tokens]);
 
   const handler = (event) => {
-    if (event.data.type !== 'oauth') return;
-    const { data } = event.data;
-    data.expires_at = moment().add(data.expires_in, 'seconds').toISOString();
-    setTokens(data);
+    if (event.data.type === 'use-discord') {
+      const { data } = event.data;
+      data.expires_at = moment().add(data.expires_in, 'seconds').toISOString();
+      setTokens(data);
+    }
   };
   useEffect(() => {
     navigator.serviceWorker.addEventListener('message', handler);
@@ -164,3 +167,42 @@ export const DiscordProvider = ({
     </Provider>
   );
 };
+
+export const onMessageHandler = (event) => {
+  if (event.data.type !== 'use-discord') return;
+  self[STATE] = event.data;
+  return true;
+};
+
+export const fetchHandler = (event) => {
+  if (!self[STATE]) return;
+  const { client_id, redirect_uri, code_verifier } = self[STATE] || {};
+
+  const url = new URL(event.request.url);
+  if (!url.href.startsWith(redirect_uri) || !url.searchParams.get('code'))  return;
+
+  event.respondWith((async () => {
+    const body = new URLSearchParams({
+      client_id,
+      redirect_uri,
+      response_type: 'token',
+      grant_type: 'authorization_code',
+      code: url.searchParams.get('code'),
+      code_verifier,
+    });
+    const req = new Request('https://discord.com/api/oauth2/token', { body, method: 'POST' });
+    const resp = await fetch(req);
+    const data = await resp.json();
+    const clients = await self.clients.matchAll();
+    clients.forEach(client => client.postMessage({ type: 'use-discord', data }));
+
+    delete self[STATE];
+    return new Response('<script type="application/javascript">window.close();</script>', {
+      headers: { 'Content-Type': 'text/html' },
+      status: 200,
+    });
+  })());
+
+  return true;
+};
+
