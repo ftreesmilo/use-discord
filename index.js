@@ -1,21 +1,33 @@
-import React, { useState, useEffect, useContext, createContext, useCallback } from 'react';
-import { Promise } from 'bluebird';
 import challenge from 'pkce-challenge';
 import moment from 'moment';
 import useInterval from 'use-interval';
 import debug from 'debug';
+import React, {
+  useState,
+  useEffect,
+  useContext,
+  createContext,
+  useCallback,
+} from 'react';
+import PropTypes from 'prop-types';
 
 const STATE = Symbol('STATE');
 
 const log = debug('discord:log');
 const error = debug('discord:error');
-error.log = console.error.bind(console);
+error.log = console.error.bind(console); // eslint-disable-line no-console
 const info = debug('discord:info');
-info.log = console.info.bind(console);
+info.log = console.info.bind(console); // eslint-disable-line no-console
 
-const login = ({client_id, redirect_uri, scopes}) => {
+const login = ({ client_id, redirect_uri, scopes }) => {
   const { code_challenge, code_verifier } = challenge(128);
-  navigator.serviceWorker.controller.postMessage({ type: 'use-discord', code_verifier, redirect_uri, client_id });
+  navigator.serviceWorker.controller.postMessage({
+    type: 'use-discord',
+    client_id,
+    code_verifier,
+    redirect_uri,
+  });
+
   const url = new URL('https://discord.com/api/oauth2/authorize');
   url.search = new URLSearchParams({
     client_id,
@@ -29,11 +41,12 @@ const login = ({client_id, redirect_uri, scopes}) => {
 };
 
 const expired = (at) => moment(at).isBefore(moment());
+const membersUrl = (guild) => `https://discord.com/api/users/@me/guilds/${guild}/member`;
 
 /**
  * @param {[string]} guilds
  */
-const discord = ({guilds, ...opts}) => {
+const discord = ({ guilds, ...opts }) => {
   const [tokens, setTokens] = useState(JSON.parse(localStorage.getItem('discord:token') || '{}'));
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [errors, setErrors] = useState([]);
@@ -77,44 +90,51 @@ const discord = ({guilds, ...opts}) => {
     return () => navigator.serviceWorker.removeEventListener('message', handler);
   }, []);
 
-  const updateRoles = useCallback(() => {
+  const updateRoles = useCallback(async () => {
     if (!isLoggedIn) return;
+    if (!tokens.access_token) return;
     if (user.avatar && user.id && user.username) {
       if (last && moment(last).add(30, 'minutes').isAfter(moment())) return;
     }
 
-    const options = { headers: { authorization: `Bearer ${tokens.access_token}` } };
+    const ops = { headers: { authorization: `Bearer ${tokens.access_token}` } };
+    const entries = guilds.map((g) => [g, fetch(membersUrl(g), ops).then((r) => r.json())]);
+    const newroles = Object.fromEntries(entries);
 
-    Promise.props(
-      Object.fromEntries(guilds.map(guild => [
-        guild,
-        fetch(`https://discord.com/api/users/@me/guilds/${guild}/member`, options)
-          .then(r => r.json()),
-      ]))
-    )
-    .then(rsp => {
-      log('raw role resp: %O', rsp);
-      const u = Object.values(rsp)
-        .map(val => val.user)
-        .find((val) => Boolean(val));
+    const es = [];
+    let readuser = false;
 
-      u && setUser({
-        avatar: `https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png?size=32`,
-        id: u.id,
-        username: u.username,
-      });
-      return rsp;
-    })
-    .then(rsp => Object.entries(rsp).reduce((prev, [key, val]) => {
-      prev[key] = val.roles;
-      return prev;
-    }, {}))
-    .tap(o => log('roles: %O', o))
-    .then(setRoles)
-    .then(() => setLast(moment().toISOString()))
-    .tapCatch(error)
-    .tapCatch(e => setErrors(...errors, e))
-    .catch(() => setTokens({}));
+    // eslint-disable-next-line no-restricted-syntax
+    for await (const [guild, prom] of entries) {
+      try {
+        const rsp = await prom;
+        log('raw role resp: %O', rsp);
+
+        const { user: { id, avatar, username } = {} } = rsp;
+        if (!readuser && id) {
+          readuser = true;
+          setUser({
+            avatar: `https://cdn.discordapp.com/avatars/${id}/${avatar}.png?size=32`,
+            id,
+            username,
+          });
+        }
+
+        newroles[guild] = rsp.roles;
+      } catch (e) {
+        es.push(e);
+      }
+    }
+
+    setErrors(es);
+    if (es.length) {
+      es.forEach((e) => error(e));
+      setTokens({});
+    } else {
+      log('roles: %O', newroles);
+      setRoles(newroles);
+      setLast(moment().toISOString());
+    }
   }, [isLoggedIn, tokens, user, errors, last]);
 
   useEffect(updateRoles, [user, tokens, isLoggedIn]);
@@ -154,7 +174,7 @@ export const useDiscord = () => useContext(ctx);
 export const DiscordProvider = ({
   children,
   client_id,
-  redirect_uri = `${location.origin}/discord`,
+  redirect_uri = `${window.location.origin}/discord`,
   scopes = ['identify', 'guilds.members.read'],
   guilds = [],
 }) => {
@@ -167,19 +187,26 @@ export const DiscordProvider = ({
     </Provider>
   );
 };
+DiscordProvider.propTypes = {
+  children: PropTypes.any,
+  client_id: PropTypes.string.isRequired,
+  redirect_uri: PropTypes.string,
+  scopes: PropTypes.arrayOf(PropTypes.string.isRequired),
+  guilds: PropTypes.arrayOf(PropTypes.string.isRequired),
+};
 
 export const onMessageHandler = (event) => {
-  if (event.data.type !== 'use-discord') return;
-  self[STATE] = event.data;
+  if (event.data.type !== 'use-discord') return false;
+  globalThis[STATE] = event.data;
   return true;
 };
 
 export const fetchHandler = (event) => {
-  if (!self[STATE]) return;
-  const { client_id, redirect_uri, code_verifier } = self[STATE] || {};
+  if (!globalThis[STATE]) return false;
+  const { client_id, redirect_uri, code_verifier } = globalThis[STATE] || {};
 
   const url = new URL(event.request.url);
-  if (!url.href.startsWith(redirect_uri) || !url.searchParams.get('code'))  return;
+  if (!url.href.startsWith(redirect_uri) || !url.searchParams.get('code')) return false;
 
   event.respondWith((async () => {
     const body = new URLSearchParams({
@@ -193,10 +220,10 @@ export const fetchHandler = (event) => {
     const req = new Request('https://discord.com/api/oauth2/token', { body, method: 'POST' });
     const resp = await fetch(req);
     const data = await resp.json();
-    const clients = await self.clients.matchAll();
-    clients.forEach(client => client.postMessage({ type: 'use-discord', data }));
+    const clients = await globalThis.clients.matchAll();
+    clients.forEach((client) => client.postMessage({ type: 'use-discord', data }));
 
-    delete self[STATE];
+    delete globalThis[STATE];
     return new Response('<script type="application/javascript">window.close();</script>', {
       headers: { 'Content-Type': 'text/html' },
       status: 200,
@@ -205,4 +232,3 @@ export const fetchHandler = (event) => {
 
   return true;
 };
-

@@ -42,13 +42,12 @@ In your service worker:
 ```js
 const { onMessageHandler, fetchHandler } = require('use-discord');
 
-addEventListener('fetch', async (event) => {
+addEventListener('fetch', (event) => {
   if (fetchHandler(event)) return;
 
   ...
 });
 addEventListener('message', onMessageHandler);
-
 ```
 
 ### Provider options:

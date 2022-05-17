@@ -2,6 +2,7 @@ root: true
 parser: '@babel/eslint-parser'
 extends:
   - airbnb-base
+  - plugin:react/recommended
 parserOptions:
   ecmaFeatures:
     jsx: true
@@ -9,9 +10,29 @@ parserOptions:
 env:
   browser: true
   es6: true
+globals:
+  globalThis: false
 rules:
   no-param-reassign: off
   import/extensions:
     - error
     - always
   no-plusplus: off
+  object-curly-newline:
+    - error
+    - consistent: true
+  camelcase:
+    - error
+    - allow:
+      # oauth params
+      - client_id
+      - code_challenge
+      - code_challenge_method
+      - code_verifier
+      - grant_type
+      - redirect_uri
+      - response_type
+      # oauth tokens
+      - access_token
+      - expires_at
+      - refresh_token
