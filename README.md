@@ -22,6 +22,35 @@ In your app's root somewhere:
     </DiscordProvider>
 ```
 
+In a component hook:
+```js
+const MyComponent = () => {
+  const discord = useDiscord();
+  return <Menu>
+    {
+      discord.isLoggedIn
+        ? <MenuItem onClick={discord.logout}>Log out of Discord</MenuItem>
+        : <MenuItem onClick={discord.login}>
+            <Typography>Log in to Discord</Typography>
+          </MenuItem>
+    }
+  </Menu>
+}
+```
+
+In your service worker:
+```js
+const { onMessageHandler, fetchHandler } = require('use-discord');
+
+addEventListener('fetch', async (event) => {
+  if (fetchHandler(event)) return;
+
+  ...
+});
+addEventListener('message', onMessageHandler);
+
+```
+
 ### Provider options:
 
 #### client_id
@@ -39,22 +68,6 @@ Default: `['identify', 'guilds.members.read']`
 Where discord will send the user during authorization flow.
 Default: `${location.origin}/discord`
 
-
-In a component hook:
-```js
-const MyComponent = () => {
-  const discord = useDiscord();
-  return <Menu>
-    {
-      discord.isLoggedIn
-        ? <MenuItem onClick={discord.logout}>Log out of Discord</MenuItem>
-        : <MenuItem onClick={discord.login}>
-            <Typography>Log in to Discord</Typography>
-          </MenuItem>
-    }
-  </Menu>
-}
-```
 ### Available actions
 
 #### login
