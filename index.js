@@ -19,6 +19,11 @@ error.log = console.error.bind(console); // eslint-disable-line no-console
 const info = debug('discord:info');
 info.log = console.info.bind(console); // eslint-disable-line no-console
 
+/**
+ * @param {string} client_id
+ * @param {string} redirect_uri
+ * @param {[string]} scopes
+ */
 const login = ({ client_id, redirect_uri, scopes }) => {
   const { code_challenge, code_verifier } = challenge(128);
   navigator.serviceWorker.controller.postMessage({
@@ -44,7 +49,37 @@ const expired = (at) => moment(at).isBefore(moment());
 const membersUrl = (guild) => `https://discord.com/api/users/@me/guilds/${guild}/member`;
 
 /**
- * @param {[string]} guilds
+ * @typedef {{[server: string]: [string]}} RoleList
+ */
+
+/**
+ * @typedef {{avatar: string, username: string, id: string}} DiscordUser
+ */
+
+/**
+ * @typedef DiscordArgs
+ * @property {[string]} guilds
+ * @property {string} client_id
+ * @property {string} redirect_uri
+ * @property {[string]} scopes
+ */
+
+/**
+ * @typedef DiscordState
+ * @property {[Error]} errors
+ * @property {()=>void} clearErrors
+ * @property {RoleList} roles
+ * @property {string} uid
+ * @property {string} username
+ * @property {string} avatar
+ * @property {boolean} isLoggedIn
+ * @property {() => void} login
+ * @property {() => void} logout
+ */
+
+/**
+ * @param {DiscordArgs} arg0
+ * @return {DiscordState}
  */
 const discord = ({ guilds, ...opts }) => {
   const [tokens, setTokens] = useState(JSON.parse(localStorage.getItem('discord:token') || '{}'));
@@ -52,15 +87,12 @@ const discord = ({ guilds, ...opts }) => {
   const [errors, setErrors] = useState([]);
   const [last, setLast] = useState(localStorage.getItem('discord:last') || '');
 
-  const rolesState = useState(JSON.parse(localStorage.getItem('discord:roles') || '{}'));
-  /** @type {{[server: string]: [string]}} */
-  const roles = rolesState[0];
-  const setRoles = rolesState[1];
 
-  const userState = useState(JSON.parse(localStorage.getItem('discord:user') || '{}'));
-  /** @type {{ avatar: string, username: string, id: string }} */
-  const user = userState[0];
-  const setUser = userState[1];
+  /** @type {[RoleList, (roles: RoleList) => void]} */
+  const [roles, setRoles] = rolesState = useState(JSON.parse(localStorage.getItem('discord:roles') || '{}'));
+
+  /** @type {[DiscordUser, (user: DiscordUser) => void]} */
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem('discord:user') || '{}'));
 
   useEffect(() => {
     const { access_token, refresh_token, expires_at } = tokens;
@@ -159,6 +191,7 @@ const discord = ({ guilds, ...opts }) => {
   };
 };
 
+/** @type {React.Context<DiscordState>} */
 const ctx = createContext(null);
 export const useDiscord = () => useContext(ctx);
 
