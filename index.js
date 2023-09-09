@@ -87,7 +87,6 @@ const discord = ({ guilds, ...opts }) => {
   const [errors, setErrors] = useState([]);
   const [last, setLast] = useState(localStorage.getItem('discord:last') || '');
 
-
   /** @type {[RoleList, (roles: RoleList) => void]} */
   const [roles, setRoles] = useState(JSON.parse(localStorage.getItem('discord:roles') || '{}'));
 
