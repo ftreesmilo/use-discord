@@ -169,8 +169,8 @@ const discord = ({ guilds, ...opts }) => {
     }
   }, [isLoggedIn, tokens, user, errors, last]);
 
-  useEffect(updateRoles, [user, tokens, isLoggedIn]);
-  useInterval(updateRoles, 60 * 60 * 1000); // refresh every hour
+  useEffect(() => updateRoles(), [user, tokens, isLoggedIn]);
+  useInterval(() => updateRoles(), 60 * 60 * 1000); // refresh every hour
 
   useEffect(() => localStorage.setItem('discord:token', JSON.stringify(tokens)), [tokens]);
   useEffect(() => localStorage.setItem('discord:user', JSON.stringify(user)), [user]);
